@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="zh_tw">
+<head>
+    <meta charset="UTF-8">
+    <title>Django Websocket demo</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.2.1/css/bootstrap.min.css" integrity="sha384-GJzZqFGwb1QTTN6wy59ffF1BuGJpLSa9DkKMp0DgiMDm4iYMj70gZWKYbI706tWS" crossorigin="anonymous">
+    <style>
+        .vh-90 {
+            height: 90vh!important;
+        }
+
+        .footer-box {
+            position: absolute;
+            width: 100%;
+            bottom: -21px;
+        }
+
+        #message {
+            border-radius: 0!important;
+        }
+
+        #send_message {
+            border-radius: 0!important;
+        }
+
+        .server-message-box {
+            display: flex;
+            justify-content: center;
+            color: #333;
+        }
+
+        .message-bubble-box {
+            display: flex;
+            margin-top: 10px;
+            margin-bottom: 10px;
+        }
+
+        .message-bubble-box.left {
+            align-items: flex-end;
+        }
+
+        .message-bubble-box.left .content {
+            background-color: var(--cyan);
+            border-radius: 5px;
+            padding: 5px 15px;
+            color: #fff;
+        }
+
+        .message-bubble-box.left .content::after {
+            content: '';
+            width: 0;
+            height: 0;
+            border: 10px solid;
+            position: absolute;
+            border-color: transparent var(--cyan) transparent transparent;
+            left: 0;
+            margin-top: 12px;
+        }
+        .message-bubble-box.left .user {
+            margin-left: 5px;
+            color: #aaa;
+        }
+
+        .message-bubble-box.right {
+            align-items: flex-end;
+            justify-content: flex-end;
+        }
+
+        .message-bubble-box.right .content {
+            background-color: var(--pink);
+            border-radius: 5px;
+            padding: 5px 15px;
+            color: #fff;
+        }
+
+        .message-bubble-box.right .content::after {
+            content: '';
+            width: 0;
+            height: 0;
+            border: 10px solid;
+            position: absolute;
+            border-color: transparent transparent transparent var(--pink);
+            margin-top: 12px;
+            right: 0;
+        }
+        .message-bubble-box.right .user {
+            margin-right: 5px;
+            color: #aaa;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="row justify-content-center align-items-center vh-100 ">
+          <div class="col-12 vh-90 pl-0 pr-0" style="border: 1px solid #ddd;" >
+              <div class="m-3 mb-0" id="message_box">
+              </div>
+              <div class="footer-box">
+                  <div class="input-group mb-3">
+                      <input type="text" class="form-control" placeholder="請輸入訊息" name="message" id="message">
+                      <div class="input-group-append">
+                          <input type="submit" class="btn btn-primary" id="send_message" name="send_message" value="傳送" disabled>
+                      </div>
+                  </div>
+              </div>
+          </div>
+        </div>
+    </div>
+</body>
+<script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.6/umd/popper.min.js" integrity="sha384-wHAiFfRlMFy6i5SRaxvfOCifBUQy1xHdJ/yoi7FRNXMRBu5WHdZYu1hA6ZOblgut" crossorigin="anonymous"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.2.1/js/bootstrap.min.js" integrity="sha384-B0UglyR+jN6CkvvICOB2joaf5I4l3gm9GU6Hc1og6Ls7i6U/mkkaduKaBhlAXv9k" crossorigin="anonymous"></script>
+<script>
+     function createMessageBubbleBox(position, user, content) {
+        let element = "<div class=\"message-bubble-box {position}\">\n" +
+                            "<span class=\"content order-{order-content}\">{content}</span>\n" +
+                            "<small class=\"user order-{order-user}\">{user}</small>\n" +
+                       "</div>";
+
+        element = element.replace('{position}', position);
+        element = element.replace('{user}', user);
+        element = element.replace('{content}', content);
+
+        if (position === 'left') {
+            element = element.replace('{order-content}', '1');
+            element = element.replace('{order-user}', '2');
+        }
+        else if (position === 'right') {
+            element = element.replace('{order-content}', '2');
+            element = element.replace('{order-user}', '1');
+        }
+
+        return element;
+    }
+
+     function createServerMessageBox(content) {
+         let element = "<div class=\"server-message-box \">" +
+                            "<span class=\"text-center\">{content}</span>" +
+                        "</div>";
+
+        element = element.replace('{content}', content);
+        return element;
+     }
+
+     $(function(){
+         let $message_box = $('#message_box');
+
+         if ("WebSocket" in window) {
+             let ws = new WebSocket("ws://" + location.host);
+             console.log('ws',ws);
+
+             let $send_message_button = $('#send_message');
+             let $user = '';
+
+
+             ws.onopen = function () {
+                 $message_box.append( createServerMessageBox('連線成功') );
+             };
+
+             ws.onmessage = function (evt) {
+                 data = JSON.parse(evt.data);
+                 console.log(data);
+                 switch (data.type) {
+                     case 'chat.connect':
+                         $message_box.append( createServerMessageBox('您的ID為 ' + data.event) );
+                         $user = data.event;
+                         $send_message_button.removeAttr('disabled');
+                         break;
+                     case 'chat.connect.new':
+                         if (data.event.user !== $user) {
+                             $message_box.append( createServerMessageBox(data.event.user + '已加入聊天室') );
+                         }
+                         break;
+                     case 'chat.connect.disconnect':
+                          $message_box.append( createServerMessageBox(data.event.user + '已退出聊天室') );
+                         break;
+                     case 'chat.message.me':
+                         $message_box.append( createMessageBubbleBox('right', '我', data.event.message) );
+                         break;
+                     case 'chat.message.others':
+                         if (data.event.user !== $user) {
+                             $message_box.append( createMessageBubbleBox('left', data.event.user, data.event.message) );
+                         }
+                         break;
+                 }
+             };
+
+             ws.onclose = function () {
+                 $message_box.append( createServerMessageBox('連線已中斷') );
+             };
+
+             $send_message_button.click(function(){
+                 let message = $('#message');
+                 ws.send(JSON.stringify({
+                     'type': 'chat.message',
+                     'event': message.val()
+                 }));
+                 message.val('');
+             });
+         }
+         else {
+             $message_box.append( createServerMessageBox('瀏覽器不支援Websocket') );
+         }
+     });
+</script>
+</html>
