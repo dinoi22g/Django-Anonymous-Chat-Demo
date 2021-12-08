@@ -3,5 +3,6 @@
 
 #####How to use?
 
-`python manage.py runserver`
-
+```console
+python manage.py runserver
+```
